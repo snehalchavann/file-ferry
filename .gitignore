@@ -52,3 +52,18 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# Serilog log files
+*.log
+
+# FileFerry Logs folder (explicit in case capitalization varies)
+Logs/
+
+# Environment-specific config
+appsettings.Development.json
+
+# VS Code settings (optional)
+.vscode/
+
+# macOS system file
+.DS_Store
