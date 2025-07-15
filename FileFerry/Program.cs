@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using FileFerry.Interfaces;
 using FileFerry.Models;
 using FileFerry.Services;
+using FileFerry.Configurations;
 using Serilog;
 using Serilog.Events;
 
@@ -22,7 +23,16 @@ builder.Logging.ClearProviders();
 builder.Logging.AddSerilog();
 
 // Register file handlers
-builder.Services.AddSingleton<IFileHandler, LocalFileHandler>();
+string fileHandlerType = builder.Configuration["HandlerType"] ?? "Local";
+if (fileHandlerType.Equals("Cloud", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddSingleton<IFileHandler, CloudFileHandler>();
+}
+else
+{
+    builder.Services.AddSingleton<IFileHandler, LocalFileHandler>();
+}
+builder.Services.Configure<AzureSettings>(builder.Configuration.GetSection("Azure"));
 
 // Register services
 var app = builder.Build();
@@ -41,13 +51,34 @@ if (string.IsNullOrWhiteSpace(sourcePath) || string.IsNullOrWhiteSpace(destinati
     return;
 }
 
-// Create a file command
-var fileCommands = new List<FileCommand>
+string CombineCloudPath(string baseUrl, string fileName) => baseUrl.TrimEnd('/') + "/" + fileName;
+
+var localFiles = Directory.GetFiles(sourcePath);
+var fileCommands = new List<FileCommand>();
+
+Func<string, string> getArchivePath = fileName => 
+fileHandler is CloudFileHandler
+    ? CombineCloudPath(archivePath, fileName)
+    : Path.Combine(archivePath, fileName);
+
+Func<string, string> getDestinationPath = fileName =>
+fileHandler is CloudFileHandler
+    ? CombineCloudPath(destinationPath, fileName)
+    : Path.Combine(destinationPath, fileName);
+
+// Prepare file commands
+foreach (string file in localFiles)
 {
-    new FileCommand(Path.Combine(sourcePath, "testfile.txt"), Path.Combine(archivePath, "testfile.txt"), FileOperation.Copy),
-    new FileCommand(Path.Combine(archivePath, "testfile.txt"), Path.Combine(destinationPath, "testfile.txt"), FileOperation.Move),
-    new FileCommand(Path.Combine(sourcePath, "testfile.txt"), null, FileOperation.Delete)
-};
+    string fileName = Path.GetFileName(file);
+    string archiveFilePath = getArchivePath(fileName);
+    string destinationFilePath = getDestinationPath(fileName);
+
+    fileCommands.Add(new FileCommand(file, archiveFilePath, FileOperation.Copy));
+    fileCommands.Add(new FileCommand(archiveFilePath, destinationFilePath, FileOperation.Move));
+    fileCommands.Add(new FileCommand(file, null, FileOperation.Delete));
+}
+
+HashSet<string> processedFiles = new HashSet<string>();
 
 // Execute file commands
 foreach (FileCommand command in fileCommands)
@@ -55,7 +86,21 @@ foreach (FileCommand command in fileCommands)
     String destination = command.Operation == FileOperation.Delete ? "N/A" : command.DestinationPath;
     try
     {
+        string fileName = Path.GetFileName(command.SourcePath);
+        if(command.Operation == FileOperation.Delete)
+        {  
+            if (!processedFiles.Contains(fileName))
+            {
+                logger.LogWarning($"Skipping delete: file is not moved: {command.SourcePath}");
+                continue;
+            }
+        }
         await fileHandler.ExecuteCommandAsync(command);
+
+        if(command.Operation == FileOperation.Move)
+        {
+            processedFiles.Add(fileName);
+        }
         logger.LogInformation($"Executed command: {command.Operation} from {command.SourcePath} to {destination}");
     }
     catch (Exception ex)
