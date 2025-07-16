@@ -73,38 +73,18 @@ foreach (string file in localFiles)
     string archiveFilePath = getArchivePath(fileName);
     string destinationFilePath = getDestinationPath(fileName);
 
-    fileCommands.Add(new FileCommand(file, archiveFilePath, FileOperation.Copy));
-    fileCommands.Add(new FileCommand(archiveFilePath, destinationFilePath, FileOperation.Move));
-    fileCommands.Add(new FileCommand(file, null, FileOperation.Delete));
-}
+    try{
+        await fileHandler.ExecuteCommandAsync(new FileCommand(file, archiveFilePath, FileOperation.Copy));
+        logger.LogInformation($"Copied {file} to archive at {archiveFilePath}");
 
-HashSet<string> processedFiles = new HashSet<string>();
+        await fileHandler.ExecuteCommandAsync(new FileCommand(archiveFilePath, destinationFilePath, FileOperation.Move));
+        logger.LogInformation($"Moved {archiveFilePath} to destination at {destinationFilePath}");
 
-// Execute file commands
-foreach (FileCommand command in fileCommands)
-{
-    String destination = command.Operation == FileOperation.Delete ? "N/A" : command.DestinationPath;
-    try
-    {
-        string fileName = Path.GetFileName(command.SourcePath);
-        if(command.Operation == FileOperation.Delete)
-        {  
-            if (!processedFiles.Contains(fileName))
-            {
-                logger.LogWarning($"Skipping delete: file is not moved: {command.SourcePath}");
-                continue;
-            }
-        }
-        await fileHandler.ExecuteCommandAsync(command);
-
-        if(command.Operation == FileOperation.Move)
-        {
-            processedFiles.Add(fileName);
-        }
-        logger.LogInformation($"Executed command: {command.Operation} from {command.SourcePath} to {destination}");
+        await fileHandler.ExecuteCommandAsync(new FileCommand(file, null, FileOperation.Delete));
+        logger.LogInformation($"Deleted original file at {file}");
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, $"Failed to execute command: {command.Operation} from {command.SourcePath} to {destination}");
+        logger.LogError(ex, $"Failed to process file {file}");
     }
 }
