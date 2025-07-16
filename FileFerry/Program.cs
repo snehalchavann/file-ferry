@@ -33,12 +33,14 @@ else
     builder.Services.AddSingleton<IFileHandler, LocalFileHandler>();
 }
 builder.Services.Configure<AzureSettings>(builder.Configuration.GetSection("Azure"));
+builder.Services.AddSingleton<FileProcessor>();
 
 // Register services
 var app = builder.Build();
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 var fileHandler = app.Services.GetRequiredService<IFileHandler>();
 var config = app.Services.GetRequiredService<IConfiguration>();
+var fileProcessor = app.Services.GetRequiredService<FileProcessor>();
 
 // Read file paths from configuration
 string? sourcePath = config["Paths:SourcePath"];
@@ -51,40 +53,5 @@ if (string.IsNullOrWhiteSpace(sourcePath) || string.IsNullOrWhiteSpace(destinati
     return;
 }
 
-string CombineCloudPath(string baseUrl, string fileName) => baseUrl.TrimEnd('/') + "/" + fileName;
-
-var localFiles = Directory.GetFiles(sourcePath);
-var fileCommands = new List<FileCommand>();
-
-Func<string, string> getArchivePath = fileName => 
-fileHandler is CloudFileHandler
-    ? CombineCloudPath(archivePath, fileName)
-    : Path.Combine(archivePath, fileName);
-
-Func<string, string> getDestinationPath = fileName =>
-fileHandler is CloudFileHandler
-    ? CombineCloudPath(destinationPath, fileName)
-    : Path.Combine(destinationPath, fileName);
-
-// Prepare file commands
-foreach (string file in localFiles)
-{
-    string fileName = Path.GetFileName(file);
-    string archiveFilePath = getArchivePath(fileName);
-    string destinationFilePath = getDestinationPath(fileName);
-
-    try{
-        await fileHandler.ExecuteCommandAsync(new FileCommand(file, archiveFilePath, FileOperation.Copy));
-        logger.LogInformation($"Copied {file} to archive at {archiveFilePath}");
-
-        await fileHandler.ExecuteCommandAsync(new FileCommand(archiveFilePath, destinationFilePath, FileOperation.Move));
-        logger.LogInformation($"Moved {archiveFilePath} to destination at {destinationFilePath}");
-
-        await fileHandler.ExecuteCommandAsync(new FileCommand(file, null, FileOperation.Delete));
-        logger.LogInformation($"Deleted original file at {file}");
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, $"Failed to process file {file}");
-    }
-}
+// Process files
+await fileProcessor.ProcessFileCommandAsync(sourcePath, archivePath, destinationPath);
