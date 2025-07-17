@@ -19,18 +19,18 @@ public class LocalFileHandler : IFileHandler
             {
                 case FileOperation.Copy:
                     File.Copy(command.SourcePath, command.DestinationPath!, true);
-                    _logger.LogInformation($"Copying from {command.SourcePath} to {command.DestinationPath}");
+                    _logger.LogInformation($"LocalFileHandler: Copied from {command.SourcePath} to {command.DestinationPath}");
                     break;
                 case FileOperation.Move:
                     File.Move(command.SourcePath, command.DestinationPath!, true);
-                    _logger.LogInformation($"Moving from {command.SourcePath} to {command.DestinationPath}");
+                    _logger.LogInformation($"LocalFileHandler: Moved from {command.SourcePath} to {command.DestinationPath}");
                     break;
                 case FileOperation.Delete:
                     File.Delete(command.SourcePath);
-                    _logger.LogInformation($"Deleting file at {command.SourcePath}");
+                    _logger.LogInformation($"LocalFileHandler: Deleted file at {command.SourcePath}");
                     break;
                 default:
-                    _logger.LogInformation("Invalid operation.");
+                    _logger.LogInformation("LocalFileHandler: Invalid operation.");
                     break;
                 
             }

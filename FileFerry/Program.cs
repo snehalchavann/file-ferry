@@ -33,6 +33,7 @@ else
     builder.Services.AddSingleton<IFileHandler, LocalFileHandler>();
 }
 builder.Services.Configure<AzureSettings>(builder.Configuration.GetSection("Azure"));
+builder.Services.Configure<RetryPolicyConfig>(builder.Configuration.GetSection("RetryPolicy"));
 builder.Services.AddSingleton<FileProcessor>();
 
 // Register services
@@ -54,4 +55,5 @@ if (string.IsNullOrWhiteSpace(sourcePath) || string.IsNullOrWhiteSpace(destinati
 }
 
 // Process files
-await fileProcessor.ProcessFileCommandAsync(sourcePath, archivePath, destinationPath);
+int maxParallelism = config.GetValue("MaxDegreeOfParallelism", 4);
+await fileProcessor.ProcessFileCommandAsync(sourcePath, archivePath, destinationPath, maxParallelism);
