@@ -15,10 +15,10 @@ public class FileProcessor
         _logger = logger;
     }
 
-    public async Task ProcessFileCommandAsync(string sourcePath, string archivePath, string destinationPath)
+    public async Task ProcessFileCommandAsync(string sourcePath, string archivePath, string destinationPath, int maxParallelism)
     {
         var localFiles = Directory.GetFiles(sourcePath);
-        await Parallel.ForEachAsync(localFiles, new ParallelOptions { MaxDegreeOfParallelism = 4 }, async (file, cancellationToken) =>
+        await Parallel.ForEachAsync(localFiles, new ParallelOptions { MaxDegreeOfParallelism = maxParallelism }, async (file, cancellationToken) =>
         {
             string fileName = Path.GetFileName(file);
             string archiveFilePath = GetPath(archivePath,fileName);
@@ -26,17 +26,17 @@ public class FileProcessor
 
             try{
                 await _fileHandler.ExecuteCommandAsync(new FileCommand(file, archiveFilePath, FileOperation.Copy));
-                _logger.LogInformation($"Copied {file} to archive at {archiveFilePath}");
+                _logger.LogInformation($"FileProcessor: Copied {file} to archive at {archiveFilePath}");
 
                 await _fileHandler.ExecuteCommandAsync(new FileCommand(archiveFilePath, destinationFilePath, FileOperation.Move));
-                _logger.LogInformation($"Moved {archiveFilePath} to destination at {destinationFilePath}");
+                _logger.LogInformation($"FileProcessor: Moved {archiveFilePath} to destination at {destinationFilePath}");
 
                 await _fileHandler.ExecuteCommandAsync(new FileCommand(file, null, FileOperation.Delete));
-                _logger.LogInformation($"Deleted original file at {file}");
+                _logger.LogInformation($"FileProcessor: Deleted original file at {file}");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Failed to process file {file}");
+                _logger.LogError(ex, $"FileProcessor: Failed to process file {file}");
             }
         });
     }
